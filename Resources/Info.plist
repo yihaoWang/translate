@@ -23,6 +23,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>MacLiveTranslator needs microphone or virtual audio input access to translate live audio.</string>
+	<string>MacLiveTranslator can use microphone input only if a future capture mode enables it.</string>
 </dict>
 </plist>

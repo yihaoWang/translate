@@ -1,6 +1,6 @@
 # Mac Live Translator
 
-一個原生 macOS 即時字幕工具。它以透明浮動字幕框顯示雙語字幕，讀取目前的預設音訊輸入裝置，將聲音切成短段 WAV，並用本機 `whisper-cli` 與 Whisper 模型處理，不會連到 OpenAI。
+一個原生 macOS 即時字幕工具。它以透明浮動字幕框顯示雙語字幕，直接擷取 macOS 系統輸出音訊，將聲音切成短段 WAV，並用本機 `whisper-cli` 與 Whisper 模型處理，不會連到 OpenAI。
 
 ## 需求
 
@@ -8,7 +8,7 @@
 - Xcode Command Line Tools
 - Homebrew 安裝的 `whisper-cli`
 - Whisper 模型檔，例如 `/Users/yihao.wang/.whisper-models/ggml-small.bin`
-- 如果要翻譯「Mac 系統聲音」，建議安裝 BlackHole 2ch 或 Loopback，將系統輸出路由成輸入裝置
+- 螢幕錄製權限，供 ScreenCaptureKit 擷取系統輸出音訊
 
 ## 執行
 
@@ -24,7 +24,7 @@ scripts/package-app.sh
 open .build/MacLiveTranslator.app
 ```
 
-第一次啟動錄音時，macOS 會要求麥克風權限。請允許 Terminal 或執行此 app 的程式使用麥克風。
+第一次啟動時，macOS 可能會要求螢幕錄製權限。請到「系統設定 > 隱私權與安全性 > 螢幕錄製」允許 MacLiveTranslator，然後重新啟動 app。
 
 ## 本地模型模式
 
@@ -37,18 +37,10 @@ open .build/MacLiveTranslator.app
 
 ## 翻譯 Mac 系統聲音
 
-macOS 一般 app 不能直接偷聽所有系統輸出音訊。最穩定的做法是用虛擬音訊裝置：
-
-1. 安裝 BlackHole 2ch。
-2. 在「音訊 MIDI 設定」建立 Multi-Output Device，勾選你的喇叭或耳機，以及 BlackHole 2ch。
-3. 在「系統設定 > 聲音 > 輸出」選擇剛建立的 Multi-Output Device。
-4. 在「系統設定 > 聲音 > 輸入」選擇 BlackHole 2ch。
-5. 啟動本工具並按「開始」。
-
-如果只是要翻譯麥克風或會議輸入，直接把系統輸入裝置設成對應的麥克風即可。
+本工具現在使用 ScreenCaptureKit 直接擷取系統輸出音訊，不需要 BlackHole 或 Loopback。按「開始」後，Chrome、YouTube、影片播放器等輸出到 Mac 的聲音會進入本機 Whisper。
 
 ## 目前限制
 
-- 目前使用預設輸入裝置；切換輸入裝置請到 macOS 系統設定。
+- 目前擷取整個系統輸出音訊；Chrome-only 篩選可在後續版本加入。
 - 每 5 秒處理一段音訊，因此字幕會有短延遲。
 - 目前已安裝並驗證日文 → 繁中與英文 → 繁中翻譯。韓文、西文、法文、德文 → 繁中需要再安裝對應的 Argos 離線翻譯模型。

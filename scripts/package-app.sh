@@ -12,6 +12,7 @@ mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 cp "$ROOT_DIR/Resources/translate_zt.py" "$APP_DIR/Contents/Resources/translate_zt.py"
+cp "$ROOT_DIR/Resources/translate_zt_server.py" "$APP_DIR/Contents/Resources/translate_zt_server.py"
 cp "$EXECUTABLE" "$APP_DIR/Contents/MacOS/MacLiveTranslator"
 chmod +x "$APP_DIR/Contents/MacOS/MacLiveTranslator"
 
