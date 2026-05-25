@@ -78,17 +78,19 @@ Expected benefit:
 
 ## 4. Translation Pipeline Optimization
 
-Status: partially implemented. Repeated translation caching is active, and Argos now runs as a persistent helper process to avoid per-caption Python/model startup. Direct Japanese -> Traditional Chinese model research remains open.
+Status: partially implemented. Repeated translation caching is active, Argos now runs as a persistent helper process, and the app now prefers installed direct Japanese -> Traditional Chinese/Chinese translation paths before falling back to Japanese -> English -> Traditional Chinese.
 
 Current behavior:
 - Japanese speech is transcribed by Whisper.
-- Japanese text is translated through `Japanese -> English -> Traditional Chinese`.
+- Japanese text first tries Apple Translation's installed Japanese -> Traditional Chinese language pack.
+- If Apple local translation is unavailable, Argos tries any installed direct Japanese -> Chinese/Traditional Chinese package.
+- If no direct path is installed, Argos falls back to `Japanese -> English -> Traditional Chinese`.
 
 Planned improvements:
 - Cache repeated translations by normalized source text.
 - Skip translation when the source text is empty or filtered as noise.
-- Investigate local Japanese -> Chinese / Japanese -> Traditional Chinese models.
-- Replace the two-step Argos path with a direct model if quality and speed are better.
+- Investigate and install a high-quality local Japanese -> Chinese / Japanese -> Traditional Chinese model.
+- Replace the two-step Argos fallback once a direct local model is verified to be faster and more readable.
 
 Tradeoff:
 - The two-step path is available today but slower and can lose nuance.

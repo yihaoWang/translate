@@ -1,6 +1,8 @@
 import AVFoundation
 import AppKit
 import SwiftUI
+import Translation
+import _Translation_SwiftUI
 
 enum CaptionSpeedMode: String, CaseIterable, Identifiable {
     case fast = "Fast"
@@ -47,6 +49,44 @@ enum CaptionSpeedMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppleTranslationInstallState: Equatable {
+    case unchecked
+    case checking
+    case installed
+    case available
+    case preparing
+    case unsupported
+    case failed(String)
+
+    var statusText: String {
+        switch self {
+        case .unchecked:
+            return "尚未檢查"
+        case .checking:
+            return "正在檢查..."
+        case .installed:
+            return "已安裝"
+        case .available:
+            return "尚未安裝"
+        case .preparing:
+            return "正在開啟下載/準備流程..."
+        case .unsupported:
+            return "不支援"
+        case .failed(let message):
+            return message.isEmpty ? "準備失敗" : message
+        }
+    }
+
+    var canOpenInstaller: Bool {
+        switch self {
+        case .available, .failed, .unchecked:
+            return true
+        case .checking, .installed, .preparing, .unsupported:
+            return false
+        }
+    }
+}
+
 @main
 struct MacLiveTranslatorApp: App {
     @StateObject private var controller = TranslatorController()
@@ -72,12 +112,16 @@ final class TranslatorController: ObservableObject {
     @Published var maxUtteranceMs = CaptionSpeedMode.balanced.settings.maxUtteranceMs
     @Published var isListening = false
     @Published var localStatus = "準備就緒"
+    @Published var appleTranslationStatus = "尚未檢查 Apple 直翻"
+    @Published var appleTranslationInstallState: AppleTranslationInstallState = .unchecked
+    @Published var shouldPrepareAppleTranslation = false
 
     let translator = LocalWhisperTranslator()
     private let capture = AudioCapture()
 
     init() {
         Task {
+            await checkAppleTranslationAvailability()
             await ArgosLocalTextTranslator.warmUp(sourceLanguageCode: "ja")
         }
     }
@@ -124,6 +168,58 @@ final class TranslatorController: ObservableObject {
 
     func clearCaptions() {
         translator.segments = []
+    }
+
+    func prepareAppleTranslationLanguagePack() {
+        guard sourceLanguageCode == "ja" || sourceLanguageCode == "auto" else {
+            appleTranslationStatus = "請先把語音設為日文"
+            appleTranslationInstallState = .failed("請先把語音設為日文")
+            return
+        }
+        appleTranslationStatus = "正在準備 Apple 日文 → 繁中..."
+        appleTranslationInstallState = .preparing
+        shouldPrepareAppleTranslation = true
+    }
+
+    func checkAppleTranslationAvailability() async {
+        guard #available(macOS 15.0, *) else {
+            appleTranslationStatus = "此 macOS 不支援 Apple Translation"
+            appleTranslationInstallState = .unsupported
+            return
+        }
+
+        appleTranslationInstallState = .checking
+        let availability = LanguageAvailability()
+        let source = Locale.Language(identifier: "ja")
+        let target = Locale.Language(identifier: "zh-Hant")
+        let status = await availability.status(from: source, to: target)
+
+        switch status {
+        case .installed:
+            appleTranslationStatus = "Apple 日文 → 繁中已安裝"
+            appleTranslationInstallState = .installed
+        case .supported:
+            appleTranslationStatus = "可安裝 Apple 日文 → 繁中"
+            appleTranslationInstallState = .available
+        case .unsupported:
+            appleTranslationStatus = "Apple 不支援此語言組合"
+            appleTranslationInstallState = .unsupported
+        @unknown default:
+            appleTranslationStatus = "Apple 翻譯狀態未知"
+            appleTranslationInstallState = .failed("Apple 翻譯狀態未知")
+        }
+    }
+
+    func finishAppleTranslationPreparation(success: Bool, error: Error? = nil) async {
+        shouldPrepareAppleTranslation = false
+        if success {
+            appleTranslationStatus = "Apple 日文 → 繁中已安裝"
+            appleTranslationInstallState = .installed
+            await ArgosLocalTextTranslator.warmUp(sourceLanguageCode: "ja")
+        } else {
+            appleTranslationStatus = error?.localizedDescription ?? "Apple 語言包準備失敗"
+            appleTranslationInstallState = .failed(appleTranslationStatus)
+        }
     }
 
     var currentDispatchSettings: SpeechDispatchSettings {
@@ -208,6 +304,7 @@ struct CaptionOverlayView: View {
     var body: some View {
         captionPanel
             .background(Color.clear)
+            .background(AppleTranslationPreparationHost(controller: controller).frame(width: 0, height: 0))
             .alert("發生錯誤", isPresented: Binding(
                 get: { translator.errorMessage != nil },
                 set: { if !$0 { translator.errorMessage = nil } }
@@ -218,6 +315,9 @@ struct CaptionOverlayView: View {
             }
             .onDisappear {
                 controller.stop()
+            }
+            .task {
+                await controller.checkAppleTranslationAvailability()
             }
     }
 
@@ -326,7 +426,7 @@ final class SettingsWindowManager {
 
         let hostingView = NSHostingView(rootView: SettingsPanelView(controller: controller))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 332),
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 382),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -456,6 +556,8 @@ struct SettingsPanelView: View {
 
             Divider()
 
+            appleTranslationInstallerRow
+
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 16) {
                     vadSlider(
@@ -495,13 +597,108 @@ struct SettingsPanelView: View {
                 Text("Translate \(translator.lastTranslationMs.map { "\($0)ms" } ?? "-")")
                 Text("Total \(translator.lastTotalMs.map { "\($0)ms" } ?? "-")")
                 Spacer()
-                Text("日文 → 英文 → 繁中，重複翻譯會快取")
+                Text("Apple \(controller.appleTranslationInstallState.statusText)")
             }
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(.secondary)
         }
         .padding(18)
         .background(Color(nsColor: .windowBackgroundColor))
+        .background(AppleTranslationPreparationHost(controller: controller).frame(width: 0, height: 0))
+        .task {
+            await controller.checkAppleTranslationAvailability()
+        }
+    }
+
+    private var appleTranslationInstallerRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: appleTranslationIconName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(appleTranslationTint)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(appleTranslationTint.opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Apple 本地直翻：日文 → 繁體中文")
+                    .font(.system(size: 12, weight: .bold))
+                Text(controller.appleTranslationStatus)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button {
+                Task {
+                    await controller.checkAppleTranslationAvailability()
+                    if controller.appleTranslationInstallState.canOpenInstaller {
+                        controller.prepareAppleTranslationLanguagePack()
+                    }
+                }
+            } label: {
+                Label(appleTranslationButtonTitle, systemImage: appleTranslationButtonIcon)
+                    .frame(width: 120)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .disabled(!controller.appleTranslationInstallState.canOpenInstaller)
+            .help("未安裝時會開啟 macOS 的 Apple Translation 語言下載/準備流程")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+    }
+
+    private var appleTranslationIconName: String {
+        switch controller.appleTranslationInstallState {
+        case .installed:
+            return "checkmark.circle.fill"
+        case .available:
+            return "arrow.down.circle.fill"
+        case .checking, .preparing:
+            return "clock.fill"
+        case .unsupported, .failed:
+            return "exclamationmark.triangle.fill"
+        case .unchecked:
+            return "questionmark.circle.fill"
+        }
+    }
+
+    private var appleTranslationTint: Color {
+        switch controller.appleTranslationInstallState {
+        case .installed:
+            return .green
+        case .available, .unchecked:
+            return .blue
+        case .checking, .preparing:
+            return .orange
+        case .unsupported, .failed:
+            return .red
+        }
+    }
+
+    private var appleTranslationButtonTitle: String {
+        switch controller.appleTranslationInstallState {
+        case .installed:
+            return "已安裝"
+        case .checking:
+            return "檢查中"
+        case .preparing:
+            return "準備中"
+        default:
+            return "下載語言包"
+        }
+    }
+
+    private var appleTranslationButtonIcon: String {
+        controller.appleTranslationInstallState == .installed ? "checkmark" : "arrow.down.circle"
     }
 
     private func vadSlider(
@@ -523,6 +720,50 @@ struct SettingsPanelView: View {
             Slider(value: value, in: range)
                 .frame(width: 360)
         }
+    }
+}
+
+struct AppleTranslationPreparationHost: View {
+    @ObservedObject var controller: TranslatorController
+
+    var body: some View {
+        if #available(macOS 15.0, *) {
+            AppleTranslationPreparationTaskHost(controller: controller)
+        } else {
+            Color.clear
+                .onChange(of: controller.shouldPrepareAppleTranslation) { shouldPrepare in
+                    guard shouldPrepare else { return }
+                    Task {
+                        await controller.finishAppleTranslationPreparation(success: false)
+                    }
+                }
+        }
+    }
+}
+
+@available(macOS 15.0, *)
+private struct AppleTranslationPreparationTaskHost: View {
+    @ObservedObject var controller: TranslatorController
+    @State private var configuration: TranslationSession.Configuration?
+
+    var body: some View {
+        Color.clear
+            .onChange(of: controller.shouldPrepareAppleTranslation) { shouldPrepare in
+                guard shouldPrepare else { return }
+                configuration = TranslationSession.Configuration(
+                    source: Locale.Language(identifier: "ja"),
+                    target: Locale.Language(identifier: "zh-Hant")
+                )
+            }
+            .translationTask(configuration) { session in
+                do {
+                    try await session.prepareTranslation()
+                    _ = try await session.translate("今日はいい天気ですね。")
+                    await controller.finishAppleTranslationPreparation(success: true)
+                } catch {
+                    await controller.finishAppleTranslationPreparation(success: false, error: error)
+                }
+            }
     }
 }
 

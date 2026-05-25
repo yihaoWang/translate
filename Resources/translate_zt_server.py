@@ -7,6 +7,46 @@ from opencc import OpenCC
 
 
 OPENCC = OpenCC("s2t")
+DIRECT_TARGETS = ("zt", "zh", "zh-Hant", "zh-TW")
+INSTALLED_LANGUAGE_BY_CODE = {}
+TRANSLATION_PAIR_CACHE = {}
+
+
+def installed_language_by_code() -> dict:
+    global INSTALLED_LANGUAGE_BY_CODE
+    if not INSTALLED_LANGUAGE_BY_CODE:
+        INSTALLED_LANGUAGE_BY_CODE = {
+            language.code: language
+            for language in translate.get_installed_languages()
+        }
+    return INSTALLED_LANGUAGE_BY_CODE
+
+
+def has_translation(source: str, target: str) -> bool:
+    cache_key = (source, target)
+    if cache_key in TRANSLATION_PAIR_CACHE:
+        return TRANSLATION_PAIR_CACHE[cache_key]
+
+    source_language = installed_language_by_code().get(source)
+    target_language = installed_language_by_code().get(target)
+    if source_language is None or target_language is None:
+        TRANSLATION_PAIR_CACHE[cache_key] = False
+        return False
+
+    for translation in source_language.translations_to:
+        if translation.to_lang.code == target:
+            TRANSLATION_PAIR_CACHE[cache_key] = True
+            return True
+
+    TRANSLATION_PAIR_CACHE[cache_key] = False
+    return False
+
+
+def translate_direct_if_available(text: str, source: str):
+    for target in DIRECT_TARGETS:
+        if has_translation(source, target):
+            return OPENCC.convert(translate.translate(text, source, target).strip())
+    return None
 
 
 def postprocess(source: str, original: str, translated: str) -> str:
@@ -48,6 +88,9 @@ def translate_text(source: str, text: str) -> str:
 
     if source == "ja":
         normalized = text.replace("あす", "明日")
+        direct = translate_direct_if_available(normalized, "ja")
+        if direct is not None:
+            return postprocess(source, normalized, direct)
         english = translate.translate(normalized, "ja", "en")
         translated = translate.translate(english, "en", "zt")
         return postprocess(source, normalized, translated)

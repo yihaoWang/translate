@@ -18,11 +18,27 @@ def main() -> int:
         from argostranslate import translate
 
         if source == "ja":
-            english = translate.translate(text, "ja", "en")
-            translated = translate.translate(english, "en", "zt")
+            languages = {language.code: language for language in translate.get_installed_languages()}
+            translated = None
+            source_language = languages.get("ja")
+            if source_language is not None:
+                for target in ("zt", "zh", "zh-Hant", "zh-TW"):
+                    if any(item.to_lang.code == target for item in source_language.translations_to):
+                        translated = translate.translate(text, "ja", target)
+                        break
+            if translated is None:
+                english = translate.translate(text, "ja", "en")
+                translated = translate.translate(english, "en", "zt")
         else:
             translated = translate.translate(text, source, "zt")
-        print(translated.strip())
+        try:
+            from opencc import OpenCC
+
+            translated = OpenCC("s2t").convert(translated.strip())
+        except Exception:
+            translated = translated.strip()
+
+        print(translated)
         return 0
     except Exception as exc:
         print(str(exc), file=sys.stderr)

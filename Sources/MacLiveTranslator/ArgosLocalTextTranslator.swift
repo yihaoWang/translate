@@ -4,6 +4,9 @@ enum ArgosLocalTextTranslator {
     static func warmUp(sourceLanguageCode: String?) async {
         let source = normalize(sourceLanguageCode)
         guard source == "ja" || source == "en" || source == "zh" else { return }
+        if source == "ja" {
+            _ = await AppleLocalTextTranslator.translateToTraditionalChinese("はい", sourceLanguageCode: source)
+        }
         _ = try? await PersistentArgosTranslator.shared.translate("はい", source: source)
     }
 
@@ -22,6 +25,17 @@ enum ArgosLocalTextTranslator {
         let cacheKey = "\(source):\(trimmed)"
         if let cached = await TranslationMemory.shared.value(for: cacheKey) {
             return cached
+        }
+
+        if source == "ja" {
+            let appleTranslated = await AppleLocalTextTranslator.translateToTraditionalChinese(
+                trimmed,
+                sourceLanguageCode: source
+            )
+            if !appleTranslated.isEmpty {
+                await TranslationMemory.shared.set(appleTranslated, for: cacheKey)
+                return appleTranslated
+            }
         }
 
         do {

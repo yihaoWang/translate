@@ -33,7 +33,7 @@ open .build/MacLiveTranslator.app
 - 字幕框第一行是 Whisper 偵測/轉錄出的原文。
 - 字幕框第二行是繁體中文翻譯。
 - 語音語言可以選「自動」或指定英文、日文、韓文、中文、西文、法文、德文；指定語言會提升 Whisper 辨識準確度。
-- 繁中翻譯使用本機 Argos Translate。日文會走 Japanese → English → Chinese (traditional)，英文會走 English → Chinese (traditional)，中文原文會用 OpenCC 轉繁中。
+- 繁中翻譯會優先使用本機直翻路徑：日文先嘗試 Apple Translation 的已安裝日文 → 繁中語言包，再嘗試 Argos 已安裝的日文 → 中文/繁中直翻模型；如果本機沒有直翻能力，才 fallback 到 Japanese → English → Chinese (traditional)。英文會走 English → Chinese (traditional)，中文原文會用 OpenCC 轉繁中。
 
 ## 翻譯 Mac 系統聲音
 
