@@ -9,6 +9,19 @@ def main() -> int:
         return 0
 
     try:
+        if source in {"", "auto"}:
+            latin_count = sum(1 for char in text if ("A" <= char <= "Z") or ("a" <= char <= "z"))
+            kana_count = sum(1 for char in text if "\u3040" <= char <= "\u30ff")
+            han_count = sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
+            if latin_count >= max(4, kana_count + han_count):
+                source = "en"
+            elif kana_count:
+                source = "ja"
+            elif han_count:
+                source = "zh"
+            else:
+                source = "ja"
+
         if source in {"zh", "zt", "zh-Hant", "zh-TW"}:
             from opencc import OpenCC
 

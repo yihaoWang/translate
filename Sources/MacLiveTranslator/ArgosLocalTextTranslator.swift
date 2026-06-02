@@ -2,12 +2,15 @@ import Foundation
 
 enum ArgosLocalTextTranslator {
     static func warmUp(sourceLanguageCode: String?) async {
-        let source = normalize(sourceLanguageCode)
-        guard source == "ja" || source == "en" || source == "zh" else { return }
-        if source == "ja" {
-            _ = await AppleLocalTextTranslator.translateToTraditionalChinese("はい", sourceLanguageCode: source)
+        let requestedSource = normalize(sourceLanguageCode, text: "")
+        let sources = requestedSource == "auto" ? ["ja", "en"] : [requestedSource]
+        for source in sources where source == "ja" || source == "en" || source == "zh" {
+            let sample = source == "en" ? "Hello" : "はい"
+            if source == "ja" || source == "en" {
+                _ = await AppleLocalTextTranslator.translateToTraditionalChinese(sample, sourceLanguageCode: source)
+            }
+            _ = try? await PersistentArgosTranslator.shared.translate(sample, source: source)
         }
-        _ = try? await PersistentArgosTranslator.shared.translate("はい", source: source)
     }
 
     static func translateToTraditionalChinese(
@@ -17,7 +20,7 @@ enum ArgosLocalTextTranslator {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
-        let source = normalize(sourceLanguageCode)
+        let source = normalize(sourceLanguageCode, text: trimmed)
         guard source == "ja" || source == "en" || source == "zh" else {
             return ""
         }
@@ -27,7 +30,7 @@ enum ArgosLocalTextTranslator {
             return cached
         }
 
-        if source == "ja" {
+        if source == "ja" || source == "en" {
             let appleTranslated = await AppleLocalTextTranslator.translateToTraditionalChinese(
                 trimmed,
                 sourceLanguageCode: source
@@ -50,15 +53,39 @@ enum ArgosLocalTextTranslator {
         }
     }
 
-    private static func normalize(_ sourceLanguageCode: String?) -> String {
+    private static func normalize(_ sourceLanguageCode: String?, text: String) -> String {
         let code = sourceLanguageCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if code.isEmpty || code == "auto" {
-            return "ja"
+            return inferSourceLanguage(from: text)
         }
         if code.hasPrefix("zh") {
             return "zh"
         }
         return code
+    }
+
+    private static func inferSourceLanguage(from text: String) -> String {
+        let scalars = text.unicodeScalars
+        let latinCount = scalars.filter {
+            (0x0041...0x005A).contains(Int($0.value)) || (0x0061...0x007A).contains(Int($0.value))
+        }.count
+        let kanaCount = scalars.filter {
+            (0x3040...0x30FF).contains(Int($0.value))
+        }.count
+        let hanCount = scalars.filter {
+            (0x4E00...0x9FFF).contains(Int($0.value))
+        }.count
+
+        if latinCount >= max(4, kanaCount + hanCount) {
+            return "en"
+        }
+        if kanaCount > 0 {
+            return "ja"
+        }
+        if hanCount > 0 {
+            return "zh"
+        }
+        return text.isEmpty ? "auto" : "ja"
     }
 }
 

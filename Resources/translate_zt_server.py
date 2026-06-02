@@ -78,10 +78,27 @@ def postprocess(source: str, original: str, translated: str) -> str:
     return translated
 
 
+def infer_source_language(text: str) -> str:
+    latin_count = sum(1 for char in text if ("A" <= char <= "Z") or ("a" <= char <= "z"))
+    kana_count = sum(1 for char in text if "\u3040" <= char <= "\u30ff")
+    han_count = sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
+
+    if latin_count >= max(4, kana_count + han_count):
+        return "en"
+    if kana_count:
+        return "ja"
+    if han_count:
+        return "zh"
+    return "ja"
+
+
 def translate_text(source: str, text: str) -> str:
     text = text.strip()
     if not text:
         return ""
+
+    if source in {"", "auto", None}:
+        source = infer_source_language(text)
 
     if source in {"zh", "zt", "zh-Hant", "zh-TW"}:
         return OPENCC.convert(text)

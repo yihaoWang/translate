@@ -76,12 +76,33 @@ Expected benefit:
 - Fewer hallucinated captions during quiet sections.
 - Lower CPU/GPU usage and better perceived responsiveness.
 
+## 3.1 Speaker-Change Caption Breaks
+
+Status: implemented as a lightweight realtime heuristic in `LocalWhisperTranslator`.
+
+Goal: split dialogue more like real conversation by dispatching the current caption when the app detects that the active voice likely changed.
+
+Current behavior:
+- The app still uses pause detection as the primary boundary.
+- While speech is active, it also extracts a short-window voice feature from system audio.
+- If the voice feature changes enough for two consecutive speech chunks, and the current utterance is long enough, the current caption is dispatched before appending the new speaker's audio.
+
+Settings:
+- `換人斷點`: enable or disable speaker-change splitting.
+- `換人敏感度`: lower values split more aggressively; higher values are more conservative.
+- `最短換人間隔`: prevents rapid false speaker flips during a single sentence.
+
+Tradeoff:
+- This is not full speaker diarization and does not identify stable `Speaker A/B` labels.
+- It is designed to be fast enough for live captions, so music, overlapping voices, or dramatic changes in volume can still create false splits.
+
 ## 4. Translation Pipeline Optimization
 
 Status: partially implemented. Repeated translation caching is active, Argos now runs as a persistent helper process, and the app now prefers installed direct Japanese -> Traditional Chinese/Chinese translation paths before falling back to Japanese -> English -> Traditional Chinese.
 
 Current behavior:
 - Japanese speech is transcribed by Whisper.
+- Translation can be disabled from Settings. In original-only mode, the app skips Apple/Argos translation and only shows Whisper transcription.
 - Japanese text first tries Apple Translation's installed Japanese -> Traditional Chinese language pack.
 - If Apple local translation is unavailable, Argos tries any installed direct Japanese -> Chinese/Traditional Chinese package.
 - If no direct path is installed, Argos falls back to `Japanese -> English -> Traditional Chinese`.
@@ -113,6 +134,22 @@ Settings behavior:
 - Detect common model paths under `~/.whisper-models`.
 - Warn when a selected model does not exist.
 - Make mode presets recommend a model but not forcibly override the user's chosen path without confirmation.
+
+## 5.1 Cloud ASR Engine
+
+Status: implemented as an optional OpenAI Cloud transcription engine.
+
+Goal: provide a higher-accuracy alternative when local Whisper is too inaccurate for noisy video/audio.
+
+Current behavior:
+- Settings exposes `ASR ENGINE`: `Local Whisper` or `OpenAI Cloud`.
+- `OpenAI Cloud` sends each utterance WAV chunk to `/v1/audio/transcriptions`.
+- Default cloud model is `gpt-4o-mini-transcribe`; `gpt-4o-transcribe` is also selectable.
+- The app keeps translation as a separate setting, so cloud ASR can be used with bilingual captions or original-only captions.
+
+Verification note:
+- Build/package passed locally.
+- A real cloud request requires `OPENAI_API_KEY`; the current shell did not have that environment variable, so live API validation remains pending.
 
 ## 6. Verification Standard
 

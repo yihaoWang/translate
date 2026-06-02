@@ -14,6 +14,10 @@ let package = Package(
         .executableTarget(
             name: "MacLiveTranslator",
             path: "Sources/MacLiveTranslator"
+        ),
+        .testTarget(
+            name: "MacLiveTranslatorTests",
+            dependencies: ["MacLiveTranslator"]
         )
     ]
 )

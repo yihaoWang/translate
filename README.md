@@ -33,11 +33,19 @@ open .build/MacLiveTranslator.app
 - 字幕框第一行是 Whisper 偵測/轉錄出的原文。
 - 字幕框第二行是繁體中文翻譯。
 - 語音語言可以選「自動」或指定英文、日文、韓文、中文、西文、法文、德文；指定語言會提升 Whisper 辨識準確度。
+- 原文辨識可在設定面板選 `Local Whisper` 或 `OpenAI Cloud`。OpenAI Cloud 使用 `/v1/audio/transcriptions`，預設模型是 `gpt-4o-mini-transcribe`，需要輸入 `OPENAI_API_KEY`。
+- 設定面板會記住你上次選的 ASR 引擎、模型、語言、速度/準確模式、翻譯開關和斷句參數；OpenAI key 會另外存在 macOS Keychain。
 - 繁中翻譯會優先使用本機直翻路徑：日文先嘗試 Apple Translation 的已安裝日文 → 繁中語言包，再嘗試 Argos 已安裝的日文 → 中文/繁中直翻模型；如果本機沒有直翻能力，才 fallback 到 Japanese → English → Chinese (traditional)。英文會走 English → Chinese (traditional)，中文原文會用 OpenCC 轉繁中。
+- 翻譯可以關閉；設定面板選「只顯示原文」時會跳過 Apple/Argos 翻譯流程，只跑本機 Whisper。
+- 對話切分除了停頓偵測，也支援「換人斷點」：偵測到人聲特徵明顯變化時會提前送出目前字幕，設定面板可調整敏感度與最短換人間隔。
 
 ## 翻譯 Mac 系統聲音
 
 本工具現在使用 ScreenCaptureKit 直接擷取系統輸出音訊，不需要 BlackHole 或 Loopback。按「開始」後，Chrome、YouTube、影片播放器等輸出到 Mac 的聲音會進入本機 Whisper。
+
+## 錄音保存
+
+每次按「開始」都會建立一個完整 session 的 WAV 錄音檔，停止時自動收尾成可播放檔案。錄音會存到 `~/Documents/MacLiveTranslator Recordings/`，設定面板會顯示最新檔案路徑。
 
 ## 目前限制
 
